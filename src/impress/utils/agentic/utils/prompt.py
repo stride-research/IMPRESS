@@ -26,7 +26,5 @@ Factor in the Pipeline's Age: Be more forgiving in early passes (passes is low).
 
 Resource Conservation: Be mindful of how many sub-pipelines are already running (sub_order). Be more conservative about spawning new pipelines if many already exist. Spawning a sub-pipeline is a last resort.
 
-Example Response:
-{"spawn_new_pipeline": true, "reasoning": "The protein shows a consistent negative trend over the last 4 passes and high volatility, indicating a need for a new design trajectory."}
-
+¡
 """

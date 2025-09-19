@@ -58,14 +58,11 @@ async def adaptive_criteria(protein_name:str, score_history: List[float], pipeli
 
 
     context = {
-        "protein_name": protein_name,
         "score_history": score_history,
         "scores_trend": trend,
         "scores_volatility": volatility,
         "current_pass": pipeline.passes,
-        "max_passes": pipeline.max_passes,
         "current_sub_pipeline_order": pipeline.sub_order,
-        "max_sub_pipelines": 3, # Hardcoded value
         "current_sequence_rank": pipeline.seq_rank
     }
     
