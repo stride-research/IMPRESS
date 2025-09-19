@@ -2,29 +2,20 @@ import copy
 import shutil
 import asyncio
 from typing import Dict, Any, Optional, List
+import json
 
 from radical.asyncflow import RadicalExecutionBackend
 
 from impress import PipelineSetup
 from impress import ImpressManager
 from impress.pipelines.protein_binding import ProteinBindingPipeline
+from impress.utils.agentic import llm_agent, adaptive_criteria
+from impress.utils.agentic.agent import pipelines_decisions
 
 
-async def adaptive_criteria(current_score: float, previous_score: float) -> bool:
-    """
-    Determine if protein quality has degraded requiring pipeline migration.
-    
-    Compares current and previous protein scores to decide if a protein
-    should be moved to a new pipeline for optimization.
-    
-    Args:
-        current_score: Current protein structure quality score
-        previous_score: Previous protein structure quality score
-        
-    Returns:
-        True if quality has degraded (score increased), False otherwise
-    """
-    return current_score > previous_score
+import logging
+
+logger = logging.getLogger(__name__)
 
 async def adaptive_decision(pipeline: ProteinBindingPipeline) -> Optional[Dict[str, Any]]:
     """
@@ -54,24 +45,31 @@ async def adaptive_decision(pipeline: ProteinBindingPipeline) -> Optional[Dict[s
 
             name, *_, score_str = line.split(',')
             protein = name.split('.')[0]
-            pipeline.current_scores[protein] = float(score_str)
-    
 
-    # First pass — just save current scores as previous
-    if not pipeline.previous_scores:
-        pipeline.logger.pipeline_log('Saving current scores as previous and returning')
-        pipeline.previous_scores = copy.deepcopy(pipeline.current_scores)
+            score = float(score_str)
+            pipeline.logger.pipeline_log('Appending current scores to the list of scores')
+            if protein not in pipeline.score_history: # Appending scores
+                pipeline.score_history[protein] = []
+            pipeline.score_history[protein].append(score)
+
+    # We  will wait for at least two passes 
+    if pipeline.passes < 2:
+        pipeline.logger.pipeline_log('Not enough data for adaptive decision, continuing.')
         return
 
     # Identify proteins that got worse
     sub_iter_seqs = {}
-    for protein, curr_score in pipeline.current_scores.items():
+    for protein, scores in pipeline.score_history.items():
         if protein not in pipeline.iter_seqs:
             continue
 
-        decision = await adaptive_criteria(curr_score, pipeline.previous_scores[protein])
-        pipeline.logger.pipeline_log(f'Adaptive descision: {decision}')
-        
+        try:
+            decision = await adaptive_criteria(protein, scores, pipeline)
+            pipeline.logger.pipeline_log(f'Adaptive descision: {decision}')
+        except Exception as e:
+            logger.error(e) 
+            continue
+
         if decision:
             sub_iter_seqs[protein] = pipeline.iter_seqs.pop(protein)
 
@@ -99,8 +97,8 @@ async def adaptive_decision(pipeline: ProteinBindingPipeline) -> Optional[Dict[s
                 'iter_seqs': sub_iter_seqs,
                 'seq_rank': pipeline.seq_rank + 1,
                 'sub_order': pipeline.sub_order + 1,
-                'previous_scores': copy.deepcopy(pipeline.previous_scores),
-            }
+                "score_history": copy.deepcopy(pipeline.score_history),
+            } 
         }
 
         # Submit the request
@@ -144,6 +142,10 @@ async def impress_protein_bind() -> None:
     await manager.start(pipeline_setups=pipeline_setups)
 
     await manager.flow.shutdown()
+
+    log_filename = "agent_decisions.log"
+    with open(log_filename, "w") as f:
+        json.dump(pipelines_decisions, f, indent=4)
 
 
 if __name__ == "__main__":

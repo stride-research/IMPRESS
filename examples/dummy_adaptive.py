@@ -8,7 +8,7 @@ from impress import ImpressManager
 
 from concurrent.futures import ThreadPoolExecutor
 from radical.asyncflow import ConcurrentExecutionBackend
-
+from agnostic_agent import LLMAgent
 
 class DummyProteinPipeline(ImpressBasePipeline):
     def __init__(self, name: str, flow: Any, configs: Dict[str, Any] = {}, **kwargs):
@@ -52,8 +52,16 @@ class DummyProteinPipeline(ImpressBasePipeline):
 
 
 async def adaptive_optimization_strategy(pipeline: DummyProteinPipeline) -> None:
+    """
+    
+    CONTEXT OF THE PIPELINE:
+        - 
+    
+    """
     if pipeline.generation >= pipeline.max_generations or random.random() >= 0.5:
         return
+    
+    # ADD AI HERE
 
     new_name = f"{pipeline.name}_g{pipeline.generation + 1}"
     new_config = {
